@@ -2,6 +2,15 @@
 
 ## 순서는 루트 디렉토리 파일부터 --> 로그인 동작이 이루어지는 순서대로 설명될 것임
 ### 구현시 미숙했던 부분과 개념에 대한 정리를 위해 시작했음
+**OAuth2 동작 과정**
+1. 인증요청(클라이언트->서버)
+2. 로그인 인증 페이지제공(서버->클라이언트, properties파일을 통해)
+3. 로그인 완료 후 클라이언트는 서버에게 권한코드(Authorization Code Grant) 전달 # 권한코드 : Resource Owner에게 사용 허락을 받았다는 증서
+4. 서버 -> Authorization Server(구글,네이버,카카오)에게 권한코드 전달
+5. 검증 후 서버는 Token과 Profile을 제공받음
+6. DB에 Access Token과 Refresh Token을 저장
+7. 로그인시 자원 요청(Access Token)을 통해 로그인
+8. 검증 후 vue에 자원 제공(유저정보, refresh token) --> 세션/쿠키 기반
 ------------------------------------------------------------------------------------------------
 ## yml파일이란??
 xml과 JSon, yml파일의 차이및 역할
@@ -13,10 +22,15 @@ xml : 태그 형식을 통해 key와 value를 정의한다.
 Json : Object는 {}, Array는 []형태로 감싸줌
 Yaml(yml) : -(하이픈)을 통해 Array구분, 들여쓰기(계층구조)가 주요 특징
 
-**또한 이후에 설명될 properties은 yml파일과 같은 역할을 하는데 구조와 사용방법이 조금씩 다르다. 둘 다 springboot서버가 실행될때 같이 실행되어진다.**
 ------------------------------------------------------------------------------------------------
 ## 1. CI/CD(지속적통합, 지속적배포)
+**또한 이후에 설명될 properties은 yml파일과 같은 역할을 하는데 구조와 사용방법이 조금 다르다. yml파일과 proerties파일 모두 build시 같이 실행되지만, ec2서버에 있는 properties파일은 따로 실행시켜야 하므로 deploy.sh에 설정 해놨음**
 **첫 CI/CD구현시 travis CI를 사용했으나 무료 토큰을 전부 사용해버려 Git Actions로 변경했음**
+- AWS는 Travis같은 외부서비스가 접근 할 수 없으므로 IAM을 통해 받은 key값으로 Travis CI와 AWS S3를 연동
+- 빌드가 완료되면 내장 톰캣에 들어있는 jar파일이 생성됨 jar파일을 통해 AWS서버에서 springboot파일을 실행한다
+- S3는 순수하게 파일서버의 역할을 하므로 파일을 저장하고 접근하여 검색이 가능하다.
+- codeDeploy를 활용하여 ec2서버에 배포해야 하므로 IAM에서 역할을 추가해준다 --> 설정과 권한 또한 추가해야함
+- codeDeploy에 대한 설정은 [appspec.yml](#appspec.yml)로 진행해야 한다.
 ### travis CI.yml
 
 branches:
@@ -30,12 +44,12 @@ cache:
     - '$HOME/.m2/repository'
     - '#HOME/.gradle'
 
-<u>gradlew파일을 clean 초기화후 실행</u>
+**gradlew파일을 clean 초기화후 실행**
 script: "./gradlew clean build"
-<u>처음 실행시 권한이 없으므로 권한 설정</u>
+**처음 실행시 권한이 없으므로 권한 설정**
 before_install:
   - chmod +x gradlew
-ec2서버에 존재하는 [deploy.sh](#deploy.sh)파일을 실행함
+**ec2서버에 존재하는 [deploy.sh](#deploy.sh)파일을 실행후 zip파일 위치 변경**
 before_deploy:
   - mkdir -p before-deploy
   - cp scripts/*.sh before-deploy/
@@ -44,7 +58,8 @@ before_deploy:
   - cd before-deploy && zip -r before-deploy *
   - cd ../ && mkdir -p deploy
   - mv before-deploy/before-deploy.zip deploy/springboot2-webservice.zip
-
+**외부 서비스와 연동할 행위들을 선언한다**
+**s3 noolim버킷에 zip파일 올림, key들은 travis홈페이지에 저장되어있음, branches설정도 가능**
 deploy:
   - provider: s3
     access_key_id: $AWS_ACCESS_KEY
@@ -57,47 +72,51 @@ deploy:
     wait-until-deployed: true
     on:
       all_branches: true
-
+**codeploy 또한 설정**
   - provider: codedeploy
     access_key_id: $AWS_ACCESS_KEY
     secret_access_key: $AWS_SECRET_KEY
     bucket: noolim
     key: springboot2-webservice.zip
     bundle_type: zip
-    application: noolim
-    deployment_group: noolim-group
+    application: noolim # 웹 콘솔에서 등록한 codedeploy 어플리케이션
+    deployment_group: noolim-group # codedeploy 배포 그룹
     region: ap-northeast-2
     wait-until-deployed: true
     on:
       all_branches: true
 
 
-CI 실행 완료 시 메일로 알림ㅎ
+**CI 실행 완료 시 메일로 알림**
 notifications:
   email:
     recipients:
       - az45687@naver.com
 ------------------------------------------------------------------------------------------------
-## deploy.sh
-rvice app]$ cd step1
-[ec2-user@springboot2-webservice step1]$ ls
-deploy.sh  nohup.out  springboot2-webservice  WebProject-1.0-SNAPSHOT.jar
-[ec2-user@springboot2-webservice step1]$ cd springboot2-webservice/
-[ec2-user@springboot2-webservice springboot2-webservice]$ ls
-appspec.yml  build.gradle  gradlew      out        scripts          src
-build        gradle        gradlew.bat  README.md  settings.gradle
-[ec2-user@springboot2-webservice springboot2-webservice]$ cd scripts/
-[ec2-user@springboot2-webservice scripts]$ ls
-deploy.sh
-[ec2-user@springboot2-webservice scripts]$ cd ..
-[ec2-user@springboot2-webservice springboot2-webservice]$ ls
-appspec.yml  build.gradle  gradlew      out        scripts          src
-build        gradle        gradlew.bat  README.md  settings.gradle
-[ec2-user@springboot2-webservice springboot2-webservice]$ cd ..
-[ec2-user@springboot2-webservice step1]$ ls
-deploy.sh  nohup.out  springboot2-webservice  WebProject-1.0-SNAPSHOT.jar
-[ec2-user@springboot2-webservice step1]$ vi deploy.sh
-#!/bin/bash
+
+### appsec.yml
+version: 0.0 # 우리 프로젝트 버전
+os: linux
+files:
+  - source: / # 전체 파일을 명시
+    destination: /home/ec2-user/app/step2/zip/ # source로 지정된 전체 파일이 받을 위치
+    overwrite: yes # 기존 파일들이 있으면 덮어씌운다.
+
+permissions:
+  - object: /
+    pattern: "**"
+    owner: ec2-user
+    group: ec2-user
+
+hooks:
+  ApplicationStart:
+    - location: deploy.sh
+      timeout: 60
+      runas: ec2-user
+      
+------------------------------------------------------------------------------------------------
+
+### deploy.sh
 
 REPOSITORY=/home/ec2-user/app/step1
 PROJECT_NAME=springboot2-webservice
@@ -119,3 +138,87 @@ cd $REPOSITORY
 echo "> Build 파일 복사"
 
 cp $REPOSITORY/$PROJECT_NAME/build/libs/*.jar $REPOSITORY/
+
+echo "> 현재 구동중인 애플리케이션pid확인"
+
+CURRENT_PID=$(pgrep -f ${PROJECT_NAME}.*.jar)
+
+echo "현재 구동 중인 애플리케이션pid: $CURRENT_PID"
+
+if [ -z "$CURRENT_PID" ]; then
+        echo "> 현재 구동 중인 애플리케이션이 없으므로 종료하지 않습니다."
+else
+        echo "> kill -15 $CURRENT_PID"
+        kill -15 $CURRENT_PID
+        sleep 5
+fi
+
+echo "> 새 애플리케이션 배포"
+
+JAR_NAME=$(ls -tr $REPOSITORY/*.jar | tail -n 1)
+
+echo "> JAR Name: $JAR_NAME"
+
+echo "> $JAR_NAME 에 실행권한 추가"
+
+chmod +x $JAR_NAME
+
+echo "> $JAR_NAME 실행"
+
+     nohup java -jar \
+      -Dspring.config.location=classpath:/application.properties,classpath:/application-real.properties,/home/ec2-user/app/application-oauth.properties,/home/ec2-user/app/application-real-db.properties \
+      -Dspring.profiles.active=real
+- nohup : 터미널을 종료해도 애플리케이션이 계속 구동되게 하는 리눅스 명령어
+- 찾은 jar파일명으로 해당 jar파일을 nohup로 실행한다
+- 자바를 jar파일을 실행함(외장 톰캣 설치x, 스프링 부트의 장점)
+- real.properties에는 OAuth2 login과 관련된 설정
+- real-db.properties에는 RDS접속 정보가 들어있음
+
+------------------------------------------------------------------------------------------------
+## OAuth2로그인과 RDS접속을 위한 properties 파일 설정
+
+### application-real.properties
+
+- 스프링 부트에서는 properties의 이름을 application-xxx.properties로 만들면 xxx라는 이름의 profile이 생성되어 이를 통해 관리할 수 있다. 즉, profile=xxx라는 식으로 호출하면 해당 properties의 설정등을 가져올 수 있다.
+- application.properties에 spring.profiles.include=oauth 추가
+- 실행시 oauth, real-db, real이 적힌 properties를 포함해서 실행
+
+spring.profiles.include=oauth, real-db, real
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL5InnoDBDialect # MYSQL사용
+
+spring.session.store-type=jdbc
+spring.session.jdbc.initialize-schema=always
+cors.allowed-origins='http://ec2-3-34-126-3.ap-northeast-2.compute.amazonaws.com:8082' # RDS연결
+cors.allowed-methods=GET,POST,PUT,DELETE,OPTIONS # 모든 요청
+cors.allowed-headers='*' # 허용
+cors.max-age=3600
+jwt.secret='8O3NPTBqo319DHLNqsQAfRJEdKsETOds' # JWT시크릿 토큰
+
+app.auth.tokenSecret=8O3NPTBqo319DHLNqsQAfRJEdKsETOds
+app.auth.tokenExpiry=1800000
+app.auth.refreshTokenExpiry=604800000
+app.oauth2.authorizedRedirectUris=http://ec2-3-34-126-3.ap-northeast-2.compute.amazonaws.com:8082/oauth/redirect # 로그인 수행 후 리다이렉트 주소
+
+------------------------------------------------------------------------------------------------
+
+### application-real-db.properties
+
+spring.jpa.hibernate.ddl-auto=none
+spring.datasource.url=jdbc:mariadb://springboot2-webservice.covzzjccqpoz.ap-northeast-2.rds.amazonaws.com:3306/board_db # RDS 주소
+spring.datasource.username=# 유저 name
+spring.datasource.password=# 유저 password
+spring.datasource.driver-class-name=org.mariadb.jdbc.Driver # RDS는 Maria DB로 설정되어있어 mariadb로 연결
+
+------------------------------------------------------------------------------------------------
+## 2. Gradle파일 사용 라이브러리
+1. lombok
+2. springboot web, springboot security
+3. data jpa
+4. h2database
+5. oauth2-client
+6. mariadb
+7. jdbc
+8. jjwt(3가지)
+
+------------------------------------------------------------------------------------------------\
+## 3. 코드 구현
