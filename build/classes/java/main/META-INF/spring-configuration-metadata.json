@@ -1,0 +1,71 @@
+{
+  "groups": [
+    {
+      "name": "app",
+      "type": "com.PlayProject.config.properties.AppProperties",
+      "sourceType": "com.PlayProject.config.properties.AppProperties"
+    },
+    {
+      "name": "app.auth",
+      "type": "com.PlayProject.config.properties.AppProperties$Auth",
+      "sourceType": "com.PlayProject.config.properties.AppProperties",
+      "sourceMethod": "getAuth()"
+    },
+    {
+      "name": "app.oauth2",
+      "type": "com.PlayProject.config.properties.AppProperties$OAuth2",
+      "sourceType": "com.PlayProject.config.properties.AppProperties",
+      "sourceMethod": "getOauth2()"
+    },
+    {
+      "name": "cors",
+      "type": "com.PlayProject.config.properties.CorsProperties",
+      "sourceType": "com.PlayProject.config.properties.CorsProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "app.auth.refresh-token-expiry",
+      "type": "java.lang.Long",
+      "sourceType": "com.PlayProject.config.properties.AppProperties$Auth",
+      "defaultValue": 0
+    },
+    {
+      "name": "app.auth.token-expiry",
+      "type": "java.lang.Long",
+      "sourceType": "com.PlayProject.config.properties.AppProperties$Auth",
+      "defaultValue": 0
+    },
+    {
+      "name": "app.auth.token-secret",
+      "type": "java.lang.String",
+      "sourceType": "com.PlayProject.config.properties.AppProperties$Auth"
+    },
+    {
+      "name": "app.oauth2.authorized-redirect-uris",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.PlayProject.config.properties.AppProperties$OAuth2"
+    },
+    {
+      "name": "cors.allowed-headers",
+      "type": "java.lang.String",
+      "sourceType": "com.PlayProject.config.properties.CorsProperties"
+    },
+    {
+      "name": "cors.allowed-methods",
+      "type": "java.lang.String",
+      "sourceType": "com.PlayProject.config.properties.CorsProperties"
+    },
+    {
+      "name": "cors.allowed-origins",
+      "type": "java.lang.String",
+      "sourceType": "com.PlayProject.config.properties.CorsProperties"
+    },
+    {
+      "name": "cors.max-age",
+      "type": "java.lang.Long",
+      "sourceType": "com.PlayProject.config.properties.CorsProperties"
+    }
+  ],
+  "hints": []
+}
