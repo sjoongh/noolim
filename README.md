@@ -35,7 +35,7 @@ script: "./gradlew clean build"
 <u>처음 실행시 권한이 없으므로 권한 설정</u>
 before_install:
   - chmod +x gradlew
-<u>ec2서버에 존재하는 [deploy](#deploy.sh)파일을 실행함 </u>
+ec2서버에 존재하는 [deploy](#deploy.sh)파일을 실행함
 before_deploy:
   - mkdir -p before-deploy
   - cp scripts/*.sh before-deploy/
@@ -78,4 +78,4 @@ notifications:
     recipients:
       - az45687@naver.com
 ------------------------------------------------------------------------------------------------
-#deploy.sh
+# deploy.sh
