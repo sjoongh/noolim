@@ -224,13 +224,6 @@ spring.datasource.driver-class-name=org.mariadb.jdbc.Driver # RDS는 Maria DB로
 ## 3. 코드 구현
 
 **main.class**
-package com.PlayProject;
-
-import com.PlayProject.config.properties.AppProperties;
-import com.PlayProject.config.properties.CorsProperties;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties({
@@ -266,9 +259,6 @@ public class OauthLoginApplication {
 ------------------------------------------------------------------------------------------------
 
 **AppProperties : access token과 refreshtoken, tokensecret 및 redirecturi관련 properties**
-import lombok.Getter;
-import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @Setter
@@ -281,9 +271,6 @@ public class CorsProperties {
 }
 
 **CorsProperties : Cors에 대한 모든 접근 허용**
-import lombok.Getter;
-import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @Setter
@@ -311,37 +298,8 @@ public class JwtConfig {
         return new AuthTokenProvider(secret);
     }
 }
-**SecurityConfig**
-import com.PlayProject.api.repository.user.UserRefreshTokenRepository;
-import com.PlayProject.config.properties.AppProperties;
-import com.PlayProject.config.properties.CorsProperties;
-import com.PlayProject.oauth.entity.RoleType;
-import com.PlayProject.oauth.exception.RestAuthenticationEntryPoint;
-import com.PlayProject.oauth.filter.TokenAuthenticationFilter;
-import com.PlayProject.oauth.handler.OAuth2AuthenticationFailureHandler;
-import com.PlayProject.oauth.handler.OAuth2AuthenticationSuccessHandler;
-import com.PlayProject.oauth.handler.TokenAccessDeniedHandler;
-import com.PlayProject.oauth.repository.OAuth2AuthorizationRequestBasedOnCookieRepository;
-import com.PlayProject.oauth.service.CustomOAuth2UserService;
-import com.PlayProject.oauth.service.CustomUserDetailsService;
-import com.PlayProject.oauth.token.AuthTokenProvider;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.BeanIds;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsUtils;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
+**SecurityConfig**
 
 @Configuration
 @RequiredArgsConstructor
