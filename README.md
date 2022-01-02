@@ -79,3 +79,43 @@ notifications:
       - az45687@naver.com
 ------------------------------------------------------------------------------------------------
 # deploy.sh
+rvice app]$ cd step1
+[ec2-user@springboot2-webservice step1]$ ls
+deploy.sh  nohup.out  springboot2-webservice  WebProject-1.0-SNAPSHOT.jar
+[ec2-user@springboot2-webservice step1]$ cd springboot2-webservice/
+[ec2-user@springboot2-webservice springboot2-webservice]$ ls
+appspec.yml  build.gradle  gradlew      out        scripts          src
+build        gradle        gradlew.bat  README.md  settings.gradle
+[ec2-user@springboot2-webservice springboot2-webservice]$ cd scripts/
+[ec2-user@springboot2-webservice scripts]$ ls
+deploy.sh
+[ec2-user@springboot2-webservice scripts]$ cd ..
+[ec2-user@springboot2-webservice springboot2-webservice]$ ls
+appspec.yml  build.gradle  gradlew      out        scripts          src
+build        gradle        gradlew.bat  README.md  settings.gradle
+[ec2-user@springboot2-webservice springboot2-webservice]$ cd ..
+[ec2-user@springboot2-webservice step1]$ ls
+deploy.sh  nohup.out  springboot2-webservice  WebProject-1.0-SNAPSHOT.jar
+[ec2-user@springboot2-webservice step1]$ vi deploy.sh
+#!/bin/bash
+
+REPOSITORY=/home/ec2-user/app/step1
+PROJECT_NAME=springboot2-webservice
+
+cd $REPOSITORY/$PROJECT_NAME/
+
+echo "> Git Pull"
+
+git pull
+
+echo "> 프로젝트 Build 시작"
+
+./gradlew build
+
+echo "> step1 디렉토리로 이동"
+
+cd $REPOSITORY
+
+echo "> Build 파일 복사"
+
+cp $REPOSITORY/$PROJECT_NAME/build/libs/*.jar $REPOSITORY/
