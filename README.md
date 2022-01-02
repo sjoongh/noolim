@@ -299,7 +299,7 @@ public class JwtConfig {
 }
 
 **SecurityConfig**
-
+```
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
@@ -435,3 +435,4 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         return corsConfigSource;
     }
 }
+```
