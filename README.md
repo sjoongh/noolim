@@ -32,7 +32,7 @@ Yaml(yml) : -(하이픈)을 통해 Array구분, 들여쓰기(계층구조)가 �
 - codeDeploy를 활용하여 ec2서버에 배포해야 하므로 IAM에서 역할을 추가해준다 --> 설정과 권한 또한 추가해야함
 - codeDeploy에 대한 설정은 [appspec.yml](#appspec.yml)로 진행해야 한다.
 ### travis CI.yml
-
+```
 branches:
   only:
    - main
@@ -92,9 +92,11 @@ notifications:
   email:
     recipients:
       - az45687@naver.com
+```
 ------------------------------------------------------------------------------------------------
 
 ### appsec.yml
+```
 version: 0.0 # 우리 프로젝트 버전
 os: linux
 files:
@@ -113,7 +115,7 @@ hooks:
     - location: deploy.sh
       timeout: 60
       runas: ec2-user
-      
+```   
 ------------------------------------------------------------------------------------------------
 
 ### deploy.sh
@@ -182,7 +184,7 @@ echo "> $JAR_NAME 실행"
 - 스프링 부트에서는 properties의 이름을 application-xxx.properties로 만들면 xxx라는 이름의 profile이 생성되어 이를 통해 관리할 수 있다. 즉, profile=xxx라는 식으로 호출하면 해당 properties의 설정등을 가져올 수 있다.
 - application.properties에 spring.profiles.include=oauth 추가
 - 실행시 oauth, real-db, real이 적힌 properties를 포함해서 실행
-
+```
 spring.profiles.include=oauth, real-db, real
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL5InnoDBDialect # MYSQL사용
 
@@ -198,17 +200,17 @@ app.auth.tokenSecret=8O3NPTBqo319DHLNqsQAfRJEdKsETOds
 app.auth.tokenExpiry=1800000
 app.auth.refreshTokenExpiry=604800000
 app.oauth2.authorizedRedirectUris=http://ec2-3-34-126-3.ap-northeast-2.compute.amazonaws.com:8082/oauth/redirect # 로그인 수행 후 리다이렉트 주소
-
+```
 ------------------------------------------------------------------------------------------------
 
 ### application-real-db.properties
-
+```
 spring.jpa.hibernate.ddl-auto=none
 spring.datasource.url=jdbc:mariadb://springboot2-webservice.covzzjccqpoz.ap-northeast-2.rds.amazonaws.com:3306/board_db # RDS 주소
 spring.datasource.username=# 유저 name
 spring.datasource.password=# 유저 password
 spring.datasource.driver-class-name=org.mariadb.jdbc.Driver # RDS는 Maria DB로 설정되어있어 mariadb로 연결
-
+```
 ------------------------------------------------------------------------------------------------
 ## 2. Gradle파일 사용 라이브러리
 1. lombok
@@ -224,7 +226,7 @@ spring.datasource.driver-class-name=org.mariadb.jdbc.Driver # RDS는 Maria DB로
 ## 3. 코드 구현
 
 **main.class**
-
+```
 @SpringBootApplication
 @EnableConfigurationProperties({
         CorsProperties.class,
@@ -236,7 +238,7 @@ public class OauthLoginApplication {
     }
 
 }
-
+```
 - @SpringBootApplication 어노테이션은 auto-configuration을 담당
 - 스프링부트의 자동 설정, 스프링 Bean읽기와 생성이 자동으로 지원
 - 항상 최상단에 위치해야함(어노테이션 위치부터 설정을 읽어가므로)
@@ -259,7 +261,7 @@ public class OauthLoginApplication {
 ------------------------------------------------------------------------------------------------
 
 **AppProperties : access token과 refreshtoken, tokensecret 및 redirecturi관련 properties**
-
+```
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "cors")
@@ -270,9 +272,9 @@ public class CorsProperties {
     private String allowedHeaders;
     private Long maxAge;
 }
-
+```
 **CorsProperties : Cors에 대한 모든 접근 허용**
-
+```
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "cors")
@@ -283,9 +285,9 @@ public class CorsProperties {
     private String allowedHeaders;
     private Long maxAge;
 }
-
+```
 **JwtConfig : jwt secret토큰 설정**
-
+```
 @Configuration
 public class JwtConfig {
 
@@ -297,7 +299,7 @@ public class JwtConfig {
         return new AuthTokenProvider(secret);
     }
 }
-
+```
 **SecurityConfig**
 ```
 @Configuration
