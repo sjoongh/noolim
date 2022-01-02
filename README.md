@@ -72,13 +72,13 @@ deploy:
       all_branches: true
 
 
-# CI 실행 완료 시 메일로 알림ㅎ
+CI 실행 완료 시 메일로 알림ㅎ
 notifications:
   email:
     recipients:
       - az45687@naver.com
 ------------------------------------------------------------------------------------------------
-# deploy.sh
+## deploy.sh
 rvice app]$ cd step1
 [ec2-user@springboot2-webservice step1]$ ls
 deploy.sh  nohup.out  springboot2-webservice  WebProject-1.0-SNAPSHOT.jar
