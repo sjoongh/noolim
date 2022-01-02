@@ -6,16 +6,14 @@
 ## yml파일이란??
 xml과 JSon, yml파일의 차이및 역할
 - 타 시스템간에 데이터를 주고 받을 때 데이터 포맷에 대한 약속이 필요
-- 데이터를 내부 시스템에 전송할때 포맷에 대한 형태가 정의 되어 있으면 데이터의 크기는 작아짐
-But 타 시스템들과 연동할때에는,
-데이터 규칙 및 문서를 구성하는것에 다양한 문제가 발생함
---> 때문에 xml,Json,yml과 같이 데이터 포맷을 정의하고 이 포맷들에는 규칙도 존재한다.
+- 데이터를 내부 시스템에 전송할때 포맷에 대한 형태가 정의 되어 있으면 데이터의 크기는 작아짐 But 타 시스템들과 연동할때에는, 데이터 규칙 및 문서를 구성하는것에 다양한 문제가 발생함
+- 때문에 xml,Json,yml과 같이 데이터 포맷을 정의하고 이 포맷들에는 규칙도 존재한다.
+
 xml : 태그 형식을 통해 key와 value를 정의한다.
 Json : Object는 {}, Array는 []형태로 감싸줌
 Yaml(yml) : -(하이픈)을 통해 Array구분, 들여쓰기(계층구조)가 주요 특징
 
-#### 또한 이후에 설명될 properties은 yml파일과 같은 역할을 하는데 구조와 사용방법이 조금씩 다르다
-#### 둘 다 springboot서버가 실행될때 같이 실행되어진다.
+**또한 이후에 설명될 properties은 yml파일과 같은 역할을 하는데 구조와 사용방법이 조금씩 다르다. 둘 다 springboot서버가 실행될때 같이 실행되어진다.**
 ------------------------------------------------------------------------------------------------
 ## 1. CI/CD(지속적통합, 지속적배포)
 **첫 CI/CD구현시 travis CI를 사용했으나 무료 토큰을 전부 사용해버려 Git Actions로 변경했음**
@@ -25,18 +23,19 @@ branches:
   only:
    - main
 
-Trivis CI 서버의 Home
-gradle부터 의존성을 받으면 같은 의존성은 다음 배포 때부터 받지 않음
+**Trivis CI 서버의 Home
+gradle부터 의존성을 받으면 같은 의존성은 다음 배포 때부터 받지 않음**
 cache:
   directories:
     - '$HOME/.m2/repository'
     - '#HOME/.gradle'
 
+<u>gradlew파일을 clean 초기화후 실행</u>
 script: "./gradlew clean build"
-
+<u>처음 실행시 권한이 없으므로 권한 설정</u>
 before_install:
   - chmod +x gradlew
-
+<u>ec2서버에 존재하는 deploy#deploy.sh파일을 실행함 </u>
 before_deploy:
   - mkdir -p before-deploy
   - cp scripts/*.sh before-deploy/
@@ -78,3 +77,5 @@ notifications:
   email:
     recipients:
       - az45687@naver.com
+------------------------------------------------------------------------------------------------
+## deploy.sh
