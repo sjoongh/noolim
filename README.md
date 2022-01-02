@@ -220,5 +220,261 @@ spring.datasource.driver-class-name=org.mariadb.jdbc.Driver # RDS는 Maria DB로
 7. jdbc
 8. jjwt(3가지)
 
-------------------------------------------------------------------------------------------------\
+------------------------------------------------------------------------------------------------
 ## 3. 코드 구현
+
+**main.class**
+package com.PlayProject;
+
+import com.PlayProject.config.properties.AppProperties;
+import com.PlayProject.config.properties.CorsProperties;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+
+@SpringBootApplication
+@EnableConfigurationProperties({
+        CorsProperties.class,
+        AppProperties.class
+})
+public class OauthLoginApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(OauthLoginApplication.class, args);
+    }
+
+}
+
+- @SpringBootApplication 어노테이션은 auto-configuration을 담당
+- 스프링부트의 자동 설정, 스프링 Bean읽기와 생성이 자동으로 지원
+- 항상 최상단에 위치해야함(어노테이션 위치부터 설정을 읽어가므로)
+- 스프링 컨테이너 : 인스턴스의 생명주기를 관리, 생성된 인스턴스들에게 추가적인 기능을 제공
+- 개발자가 작성한 코드의 처리과정을 위임받은 독립적인 존재(객체의 생성과 소멸을 컨트롤)
+- 이 때 Spring Container에서 생성되는 객체를 Bean이라고 한다
+- 개발자는 new 연산자, 인터페이스 호출, 팩토리 호출 방식으로 객체를 생성, 소멸할 수 있는데 스프링 컨테이너가 이 역할을 대신함 --> 즉 제어흐름을 외부에서 관리함
+- 이점 : 자기가 사용할 클래스의 인스턴스를 직접 생성할 필요가없음, 사용은 하지만 인스턴스 생성및 소멸을 다른 누군가에게 맡겨 개발자는 그저 로직구현만 신경쓰면 됨
+- 이런식으로 제어권이 IOC Container로 넘어가면 DI(의존성주입)과 AOP(관점 지향 프로그래밍)이 가능하다
+- DI(Dependency Injection) : 객체간의 의존성을 자신이 아닌 외부에서 주입한다.(setter() or 생성자 사용)
+#### 순서
+1. 객체 생성
+2. 의존성 객체 주입(스프링이 만들어 놓은 객체)
+3. 의존성 객체 메소드 호출
+**Bean : Spring IoC Container가 관리하는 자바객체(객체를 스프링이 실행될때 만들어주고 필요한곳에 주입함 싱글톤패턴 특징을 가짐)**
+1. @Component어노테이션을 사용해 빈을 등록, @ComponentScan은 어느지점부터 컴포넌트를 찾으라고 알려주는 역할
+2. 빈 설정파일에 직접 빈을 등록 --> @Configuration어노테이션을 클래스에 붙인뒤 그 안에 @Bean을 사용해 직접 빈을 정의
+3. @EnableConfigurationProperties은 springboot 2.2이후 버전부터는 사용할 필요가없음 --> @ConfigurationProperties들을 알아서 다 찾아주기 때문이다.
+
+------------------------------------------------------------------------------------------------
+
+**AppProperties : access token과 refreshtoken, tokensecret 및 redirecturi관련 properties**
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@Getter
+@Setter
+@ConfigurationProperties(prefix = "cors")
+public class CorsProperties {
+    private String allowedOrigins;
+    private String allowedMethods;
+    private String allowedHeaders;
+    private Long maxAge;
+}
+
+**CorsProperties : Cors에 대한 모든 접근 허용**
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@Getter
+@Setter
+@ConfigurationProperties(prefix = "cors")
+public class CorsProperties {
+    private String allowedOrigins;
+    private String allowedMethods;
+    private String allowedHeaders;
+    private Long maxAge;
+}
+
+**JwtConfig : jwt secret토큰 설정**
+import com.PlayProject.oauth.token.AuthTokenProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class JwtConfig {
+    @Value("${jwt.secret}")
+    private String secret;
+
+    @Bean
+    public AuthTokenProvider jwtProvider() {
+        return new AuthTokenProvider(secret);
+    }
+}
+**SecurityConfig**
+import com.PlayProject.api.repository.user.UserRefreshTokenRepository;
+import com.PlayProject.config.properties.AppProperties;
+import com.PlayProject.config.properties.CorsProperties;
+import com.PlayProject.oauth.entity.RoleType;
+import com.PlayProject.oauth.exception.RestAuthenticationEntryPoint;
+import com.PlayProject.oauth.filter.TokenAuthenticationFilter;
+import com.PlayProject.oauth.handler.OAuth2AuthenticationFailureHandler;
+import com.PlayProject.oauth.handler.OAuth2AuthenticationSuccessHandler;
+import com.PlayProject.oauth.handler.TokenAccessDeniedHandler;
+import com.PlayProject.oauth.repository.OAuth2AuthorizationRequestBasedOnCookieRepository;
+import com.PlayProject.oauth.service.CustomOAuth2UserService;
+import com.PlayProject.oauth.service.CustomUserDetailsService;
+import com.PlayProject.oauth.token.AuthTokenProvider;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.BeanIds;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsUtils;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+
+@Configuration
+@RequiredArgsConstructor
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private final CorsProperties corsProperties;
+    private final AppProperties appProperties;
+    private final AuthTokenProvider tokenProvider;
+    private final CustomUserDetailsService userDetailsService;
+    private final CustomOAuth2UserService oAuth2UserService;
+    private final TokenAccessDeniedHandler tokenAccessDeniedHandler;
+    private final UserRefreshTokenRepository userRefreshTokenRepository;
+
+    /*
+    * UserDetailsService 설정
+    * */
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userDetailsService)
+                .passwordEncoder(passwordEncoder());
+    }
+
+    @Override
+    @CrossOrigin("*")
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                    .cors()
+                .and()
+                    .sessionManagement()
+                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .and()
+                    .csrf().disable()
+                    .formLogin().disable()
+                    .httpBasic().disable()
+                    .exceptionHandling()
+                    .authenticationEntryPoint(new RestAuthenticationEntryPoint())
+                    .accessDeniedHandler(tokenAccessDeniedHandler)
+                .and()
+                    .authorizeRequests()
+                    .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
+                    .antMatchers("/api/**").hasAnyAuthority(RoleType.USER.getCode())
+                    .antMatchers("/**").hasAnyAuthority(RoleType.USER.getCode())
+                    .antMatchers("/api/**/admin/**").hasAnyAuthority(RoleType.ADMIN.getCode())
+                    .anyRequest().authenticated()
+                .and()
+                    .oauth2Login()
+                    .authorizationEndpoint()
+                    .baseUri("/oauth2/authorization")
+                    .authorizationRequestRepository(oAuth2AuthorizationRequestBasedOnCookieRepository())
+                .and()
+                    .redirectionEndpoint()
+                    .baseUri("/*/oauth2/code/*")
+                .and()
+                    .userInfoEndpoint()
+                    .userService(oAuth2UserService)
+                .and()
+                    .successHandler(oAuth2AuthenticationSuccessHandler())
+                    .failureHandler(oAuth2AuthenticationFailureHandler());
+
+        http.addFilterBefore(tokenAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+    }
+
+    /*
+    * auth 매니저 설
+    * */
+    @Override
+    @Bean(BeanIds.AUTHENTICATION_MANAGER)
+    protected AuthenticationManager authenticationManager() throws Exception {
+        return super.authenticationManager();
+    }
+
+    /*
+    * security 설정 시, 사용할 인코더 설정
+    * */
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    /*
+    * 토큰 필터 설정
+    * */
+    @Bean
+    public TokenAuthenticationFilter tokenAuthenticationFilter() {
+        return new TokenAuthenticationFilter(tokenProvider);
+    }
+
+    /*
+    * 쿠키 기반 인가 Repository
+    * 인가 응답을 연계 하고 검증할 때 사용.
+    * */
+    @Bean
+    public OAuth2AuthorizationRequestBasedOnCookieRepository oAuth2AuthorizationRequestBasedOnCookieRepository() {
+        return new OAuth2AuthorizationRequestBasedOnCookieRepository();
+    }
+
+    /*
+    * Oauth 인증 성공 핸들러
+    * */
+    @Bean
+    public OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler() {
+        return new OAuth2AuthenticationSuccessHandler(
+                tokenProvider,
+                appProperties,
+                userRefreshTokenRepository,
+                oAuth2AuthorizationRequestBasedOnCookieRepository()
+        );
+    }
+
+    /*
+     * Oauth 인증 실패 핸들러
+     * */
+    @Bean
+    public OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler() {
+        return new OAuth2AuthenticationFailureHandler(oAuth2AuthorizationRequestBasedOnCookieRepository());
+    }
+
+    /*
+    * Cors 설정
+    * */
+    @Bean
+    @CrossOrigin("*")
+    public UrlBasedCorsConfigurationSource corsConfigurationSource() {
+        UrlBasedCorsConfigurationSource corsConfigSource = new UrlBasedCorsConfigurationSource();
+
+        CorsConfiguration corsConfig = new CorsConfiguration();
+        corsConfig.addAllowedOrigin("*");
+        corsConfig.addAllowedMethod("*");
+        corsConfig.addAllowedHeader("*");
+        corsConfig.setAllowCredentials(true);
+        corsConfig.setMaxAge(corsConfig.getMaxAge());
+
+        corsConfigSource.registerCorsConfiguration("/**", corsConfig);
+        return corsConfigSource;
+    }
+}
