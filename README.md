@@ -264,6 +264,7 @@ public class OauthLoginApplication {
 @Setter
 @ConfigurationProperties(prefix = "cors")
 public class CorsProperties {
+
     private String allowedOrigins;
     private String allowedMethods;
     private String allowedHeaders;
@@ -276,6 +277,7 @@ public class CorsProperties {
 @Setter
 @ConfigurationProperties(prefix = "cors")
 public class CorsProperties {
+
     private String allowedOrigins;
     private String allowedMethods;
     private String allowedHeaders;
@@ -283,13 +285,10 @@ public class CorsProperties {
 }
 
 **JwtConfig : jwt secret토큰 설정**
-import com.PlayProject.oauth.token.AuthTokenProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class JwtConfig {
+
     @Value("${jwt.secret}")
     private String secret;
 
