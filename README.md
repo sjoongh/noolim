@@ -36,7 +36,7 @@
 **package.json**
 ```
 {
-  "name": "board-vue",
+  "name": "noolim-vue",
   "version": "1.0.0",
   "description": "A Vue.js project",
   "private": true,
