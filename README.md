@@ -1,6 +1,6 @@
 # noolim-node
 
-## Node.js는 webpack 대신 koa를 활용했다는 점이 주요 특징이다.
+## Node.js는 webpack 대신 koa를 활용
 
 **package.json**
 ```
