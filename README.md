@@ -259,8 +259,10 @@ public class OauthLoginApplication {
 3. @EnableConfigurationProperties은 springboot 2.2이후 버전부터는 사용할 필요가없음 --> @ConfigurationProperties들을 알아서 다 찾아주기 때문이다.
 
 ------------------------------------------------------------------------------------------------
+## http설정과 jwt token & api 응답 여부
 
 **AppProperties : access token과 refreshtoken, tokensecret 및 redirecturi관련 properties**
+
 ```
 @Getter
 @Setter
@@ -435,6 +437,1294 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
         corsConfigSource.registerCorsConfiguration("/**", corsConfig);
         return corsConfigSource;
+    }
+}
+```
+------------------------------------------------------------------------------------------------
+
+**ApiResponse(api 호출 실패 시 message && code)**
+```
+@Getter
+@RequiredArgsConstructor
+public class ApiResponse<T> {
+
+    private final static int SUCCESS = 200;
+    private final static int NOT_FOUND = 400;
+    private final static int FAILED = 500;
+    private final static String SUCCESS_MESSAGE = "SUCCESS";
+    private final static String NOT_FOUND_MESSAGE = "NOT FOUND";
+    private final static String FAILED_MESSAGE = "서버에서 오류가 발생하였습니다.";
+    private final static String INVALID_ACCESS_TOKEN = "Invalid access token.";
+    private final static String INVALID_REFRESH_TOKEN = "Invalid refresh token.";
+    private final static String NOT_EXPIRED_TOKEN_YET = "Not expired token yet.";
+
+    private final ApiResponseHeader header;
+    private final Map<String, T> body;
+
+    public static <T> ApiResponse<T> success(String name, T body) {
+        Map<String, T> map = new HashMap<>();
+        map.put(name, body);
+
+        return new ApiResponse(new ApiResponseHeader(SUCCESS, SUCCESS_MESSAGE), map);
+    }
+
+    public static <T> ApiResponse<T> fail() {
+        return new ApiResponse(new ApiResponseHeader(FAILED, FAILED_MESSAGE), null);
+    }
+
+    public static <T> ApiResponse<T> invalidAccessToken() {
+        return new ApiResponse(new ApiResponseHeader(FAILED, INVALID_ACCESS_TOKEN), null);
+    }
+
+    public static <T> ApiResponse<T> invalidRefreshToken() {
+        return new ApiResponse(new ApiResponseHeader(FAILED, INVALID_REFRESH_TOKEN), null);
+    }
+
+    public static <T> ApiResponse<T> notExpiredTokenYet() {
+        return new ApiResponse(new ApiResponseHeader(FAILED, NOT_EXPIRED_TOKEN_YET), null);
+    }
+}
+
+```
+
+**ApiResponseHeader**
+```
+@Setter
+@Getter
+@AllArgsConstructor
+public class ApiResponseHeader {
+    private int code;
+    private String message;
+}
+
+```
+
+---------------------------------------------------------------------------------------------
+
+
+## 로그인 페이지 응답 코드 and JPA 설정 & find user data
+
+**AuthControlller**
+```
+@RestController
+@RequestMapping("/api/v1/auth") # ~~ 매핑하여 사용
+@CrossOrigin("*") # 모든 요청에 대한 접근 허용
+@RequiredArgsConstructor
+public class AuthController {
+
+    private final AppProperties appProperties;
+    private final AuthTokenProvider tokenProvider;
+    private final AuthenticationManager authenticationManager;
+    private final UserRefreshTokenRepository userRefreshTokenRepository;
+
+    private final static long THREE_DAYS_MSEC = 259200000;
+    private final static String REFRESH_TOKEN = "refresh_token";
+
+    @PostMapping("/login") // /login에 대한 post데이터가 들어오면 여기서 받음
+    public ApiResponse login(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            @RequestBody AuthReqModel authReqModel
+    ) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        authReqModel.getId(),
+                        authReqModel.getPassword()
+                )
+        );
+
+        String userId = authReqModel.getId();
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        Date now = new Date();
+        AuthToken accessToken = tokenProvider.createAuthToken(
+                userId,
+                ((UserPrincipal) authentication.getPrincipal()).getRoleType().getCode(),
+                new Date(now.getTime() + appProperties.getAuth().getTokenExpiry())
+        );
+
+        long refreshTokenExpiry = appProperties.getAuth().getRefreshTokenExpiry();
+        AuthToken refreshToken = tokenProvider.createAuthToken(
+                appProperties.getAuth().getTokenSecret(),
+                new Date(now.getTime() + refreshTokenExpiry)
+        );
+
+        // userId refresh token 으로 DB 확인
+        UserRefreshToken userRefreshToken = userRefreshTokenRepository.findByUserId(userId);
+        if (userRefreshToken == null) {
+            // 없는 경우 새로 등록
+            userRefreshToken = new UserRefreshToken(userId, refreshToken.getToken());
+            userRefreshTokenRepository.saveAndFlush(userRefreshToken);
+        } else {
+            // DB에 refresh 토큰 업데이트
+            userRefreshToken.setRefreshToken(refreshToken.getToken());
+        }
+
+        int cookieMaxAge = (int) refreshTokenExpiry / 60;
+        CookieUtil.deleteCookie(request, response, REFRESH_TOKEN);
+        CookieUtil.addCookie(response, REFRESH_TOKEN, refreshToken.getToken(), cookieMaxAge);
+
+        return ApiResponse.success("token", accessToken.getToken());
+    }
+
+    @GetMapping("/refresh") // /refresh에 대한 get
+    public ApiResponse refreshToken (HttpServletRequest request, HttpServletResponse response) {
+        // access token 확인
+        String accessToken = HeaderUtil.getAccessToken(request);
+        AuthToken authToken = tokenProvider.convertAuthToken(accessToken);
+        if (!authToken.validate()) {
+            return ApiResponse.invalidAccessToken();
+        }
+
+        // expired access token 인지 확인
+        Claims claims = authToken.getExpiredTokenClaims();
+        if (claims == null) {
+            return ApiResponse.notExpiredTokenYet();
+        }
+
+        String userId = claims.getSubject();
+        RoleType roleType = RoleType.of(claims.get("role", String.class));
+
+        // refresh token
+        String refreshToken = CookieUtil.getCookie(request, REFRESH_TOKEN)
+                .map(Cookie::getValue)
+                .orElse((null));
+        AuthToken authRefreshToken = tokenProvider.convertAuthToken(refreshToken);
+
+        if (authRefreshToken.validate()) {
+            return ApiResponse.invalidRefreshToken();
+        }
+
+        // userId refresh token 으로 DB 확인
+        UserRefreshToken userRefreshToken = userRefreshTokenRepository.findByUserIdAndRefreshToken(userId, refreshToken);
+        if (userRefreshToken == null) {
+            return ApiResponse.invalidRefreshToken();
+        }
+
+        Date now = new Date();
+        AuthToken newAccessToken = tokenProvider.createAuthToken(
+                userId,
+                roleType.getCode(),
+                new Date(now.getTime() + appProperties.getAuth().getTokenExpiry())
+        );
+
+        long validTime = authRefreshToken.getTokenClaims().getExpiration().getTime() - now.getTime();
+
+        // refresh 토큰 기간이 3일 이하로 남은 경우, refresh 토큰 갱신
+        if (validTime <= THREE_DAYS_MSEC) {
+            // refresh 토큰 설정
+            long refreshTokenExpiry = appProperties.getAuth().getRefreshTokenExpiry();
+
+            authRefreshToken = tokenProvider.createAuthToken(
+                    appProperties.getAuth().getTokenSecret(),
+                    new Date(now.getTime() + refreshTokenExpiry)
+            );
+
+            // DB에 refresh 토큰 업데이트
+            userRefreshToken.setRefreshToken(authRefreshToken.getToken());
+
+            int cookieMaxAge = (int) refreshTokenExpiry / 60;
+            CookieUtil.deleteCookie(request, response, REFRESH_TOKEN);
+            CookieUtil.addCookie(response, REFRESH_TOKEN, authRefreshToken.getToken(), cookieMaxAge);
+        }
+
+        return ApiResponse.success("token", newAccessToken.getToken());
+    }
+}
+```
+
+**UserController**
+
+```
+@RestController
+@RequestMapping("/api/v1/users")
+@CrossOrigin("*")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService userService;
+
+    @GetMapping
+    public ApiResponse getUser() {
+        org.springframework.security.core.userdetails.User principal = (org.springframework.security.core.userdetails.User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        User user = userService.getUser(principal.getUsername());
+        return ApiResponse.success("user", user);
+    }
+}
+```
+
+**AuthReqModel**
+```
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuthReqModel {
+    private String id;
+    private String password;
+}
+```
+
+**User(JPA)**
+
+```
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "USER")
+public class User {
+    @JsonIgnore
+    @Id
+    @Column(name = "USER_SEQ")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long userSeq;
+
+    @Column(name = "USER_ID", length = 64, unique = true)
+    @NotNull
+    @Size(max = 64)
+    private String userId;
+
+    @Column(name = "USERNAME", length = 100)
+    @NotNull
+    @Size(max = 100)
+    private String username;
+
+    @JsonIgnore
+    @Column(name = "PASSWORD", length = 128)
+    @NotNull
+    @Size(max = 128)
+    private String password;
+
+    @Column(name = "EMAIL", length = 512, unique = true)
+    @NotNull
+    @Size(max = 512)
+    private String email;
+
+    @Column(name = "EMAIL_VERIFIED_YN", length = 1)
+    @NotNull
+    @Size(min = 1, max = 1)
+    private String emailVerifiedYn;
+
+    @Column(name = "PROFILE_IMAGE_URL", length = 512)
+    @NotNull
+    @Size(max = 512)
+    private String profileImageUrl;
+
+    @Column(name = "PROVIDER_TYPE", length = 20)
+    @Enumerated(EnumType.STRING)
+    @NotNull
+    private ProviderType providerType;
+
+    @Column(name = "ROLE_TYPE", length = 20)
+    @Enumerated(EnumType.STRING)
+    @NotNull
+    private RoleType roleType;
+
+    @Column(name = "CREATED_AT")
+    @NotNull
+    private LocalDateTime createdAt;
+
+    @Column(name = "MODIFIED_AT")
+    @NotNull
+    private LocalDateTime modifiedAt;
+
+    public User(
+            @NotNull @Size(max = 64) String userId,
+            @NotNull @Size(max = 100) String username,
+            @NotNull @Size(max = 512) String email,
+            @NotNull @Size(max = 1) String emailVerifiedYn,
+            @NotNull @Size(max = 512) String profileImageUrl,
+            @NotNull ProviderType providerType,
+            @NotNull RoleType roleType,
+            @NotNull LocalDateTime createdAt,
+            @NotNull LocalDateTime modifiedAt
+    ) {
+        this.userId = userId;
+        this.username = username;
+        this.password = "NO_PASS";
+        this.email = email != null ? email : "NO_EMAIL";
+        this.emailVerifiedYn = emailVerifiedYn;
+        this.profileImageUrl = profileImageUrl != null ? profileImageUrl : "";
+        this.providerType = providerType;
+        this.roleType = roleType;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+    }
+}
+
+```
+
+**UserRepository(회원가입시 user가 존재하는지 확인)**
+```
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    User findByUserId(String userId);
+}
+```
+
+**UserRefreshTokenRepository(회원가입이 완료된 유저가 재로그인시 user확인)**
+```
+@Repository
+public interface UserRefreshTokenRepository extends JpaRepository<UserRefreshToken, Long> {
+    UserRefreshToken findByUserId(String userId);
+    UserRefreshToken findByUserIdAndRefreshToken(String userId, String refreshToken);
+}
+```
+
+**UserService(??)**
+```
+@Service
+@RequiredArgsConstructor
+public class UserService {
+    private final UserRepository userRepository;
+
+    public User getUser(String userId) {
+        return userRepository.findByUserId(userId);
+    }
+}
+```
+
+**UserRefreshToken(JPA)**
+```
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "USER_REFRESH_TOKEN")
+public class UserRefreshToken {
+    @JsonIgnore
+    @Id
+    @Column(name = "REFRESH_TOKEN_SEQ")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long refreshTokenSeq;
+
+    @Column(name = "USER_ID", length = 64, unique = true)
+    @NotNull
+    @Size(max = 64)
+    private String userId;
+
+    @Column(name = "REFRESH_TOKEN", length = 256)
+    @NotNull
+    @Size(max = 256)
+    private String refreshToken;
+
+    public UserRefreshToken(
+            @NotNull @Size(max = 64) String userId,
+            @NotNull @Size(max = 256) String refreshToken
+    ) {
+        this.userId = userId;
+        this.refreshToken = refreshToken;
+    }
+}
+```
+---------------------------------------------------------------------------------------------------
+
+## OAuth2 로그인 구현 및 설정
+
+**ProviderType**
+```
+// 구글, 페이스북, 네이버, 카카오, 로컬, 로그인 TYPE 분류
+@Getter
+public enum ProviderType {
+    GOOGLE,
+    FACEBOOK,
+    NAVER,
+    KAKAO,
+    LOCAL;
+}
+
+```
+
+**RoleType(user role정보 분류 및 설정)**
+
+```
+@Getter
+@AllArgsConstructor
+public enum RoleType {
+    USER("ROLE_USER", "일반 사용자 권한"),
+    ADMIN("ROLE_ADMIN", "관리자 권한"),
+    GUEST("GUEST", "게스트 권한");
+
+    private final String code;
+    private final String displayName;
+
+    public static RoleType of(String code) {
+        return Arrays.stream(RoleType.values())
+                .filter(r -> r.getCode().equals(code))
+                .findAny()
+                .orElse(GUEST);
+    }
+}
+
+```
+
+**UserPrincipal(???)**
+```
+@Getter
+@Setter
+@AllArgsConstructor
+@RequiredArgsConstructor
+public class UserPrincipal implements OAuth2User, UserDetails, OidcUser {
+    private final String userId;
+    private final String password;
+    private final ProviderType providerType;
+    private final RoleType roleType;
+    private final Collection<GrantedAuthority> authorities;
+    private Map<String, Object> attributes;
+
+    @Override
+    public Map<String, Object> getAttributes() {
+        return attributes;
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return authorities;
+    }
+
+    @Override
+    public String getName() {
+        return userId;
+    }
+
+    @Override
+    public String getUsername() {
+        return userId;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+
+    @Override
+    public Map<String, Object> getClaims() {
+        return null;
+    }
+
+    @Override
+    public OidcUserInfo getUserInfo() {
+        return null;
+    }
+
+    @Override
+    public OidcIdToken getIdToken() {
+        return null;
+    }
+
+    public static UserPrincipal create(User user) {
+        return new UserPrincipal(
+                user.getUserId(),
+                user.getPassword(),
+                user.getProviderType(),
+                RoleType.USER,
+                Collections.singletonList(new SimpleGrantedAuthority(RoleType.USER.getCode()))
+        );
+    }
+
+    public static UserPrincipal create(User user, Map<String, Object> attributes) {
+        UserPrincipal userPrincipal = create(user);
+        userPrincipal.setAttributes(attributes);
+
+        return userPrincipal;
+    }
+}
+```
+
+**OAuthProviderMissMatchException(OAuth로그인 예외 처리)**
+```
+public class OAuthProviderMissMatchException extends RuntimeException {
+
+    public OAuthProviderMissMatchException(String message) {
+        super(message);
+    }
+}
+```
+
+**RestAuthenticationEntryPoint(Slf4j를 이용한 http 관련 에러 발생시 로그 남김)**
+```
+@Slf4j
+public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
+    @Override
+    public void commence(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AuthenticationException authException
+    ) throws IOException, ServletException {
+        authException.printStackTrace();
+        log.info("Responding with unauthorized error. Message := {}", authException.getMessage());
+        response.sendError(
+                HttpServletResponse.SC_UNAUTHORIZED,
+                authException.getLocalizedMessage()
+        );
+    }
+}
+```
+
+**TokenValidFailedException(token 에러처리)**
+```
+public class TokenValidFailedException extends RuntimeException {
+
+    public TokenValidFailedException() {
+        super("Failed to generate Token.");
+    }
+
+    private TokenValidFailedException(String message) {
+        super(message);
+    }
+}
+```
+
+**TokenAuthenticationFilter(token 에러 처리)**
+```
+@Slf4j
+@RequiredArgsConstructor
+public class TokenAuthenticationFilter extends OncePerRequestFilter {
+    private final AuthTokenProvider tokenProvider;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)  throws ServletException, IOException {
+
+        String tokenStr = HeaderUtil.getAccessToken(request);
+        AuthToken token = tokenProvider.convertAuthToken(tokenStr);
+
+        if (token.validate()) {
+            Authentication authentication = tokenProvider.getAuthentication(token);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+}
+```
+
+**OAuth2AuthenticationFailureHandler(OAuth2로그인 실패시)**
+```
+@Component
+@RequiredArgsConstructor
+public class OAuth2AuthenticationFailureHandler extends SimpleUrlAuthenticationFailureHandler {
+
+    private final OAuth2AuthorizationRequestBasedOnCookieRepository authorizationRequestRepository;
+
+    @Override
+    public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException, ServletException {
+        String targetUrl = CookieUtil.getCookie(request, OAuth2AuthorizationRequestBasedOnCookieRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
+                .map(Cookie::getValue)
+                .orElse(("/"));
+
+        exception.printStackTrace();
+
+        targetUrl = UriComponentsBuilder.fromUriString(targetUrl)
+                .queryParam("error", exception.getLocalizedMessage())
+                .build().toUriString();
+
+        authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+
+        getRedirectStrategy().sendRedirect(request, response, targetUrl);
+    }
+}
+```
+
+**OAuth2AuthenticationSuccessHandler(OAuth 로그인 성공)**
+```
+@Component
+@RequiredArgsConstructor
+public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
+
+    private final AuthTokenProvider tokenProvider;
+    private final AppProperties appProperties;
+    private final UserRefreshTokenRepository userRefreshTokenRepository;
+    private final OAuth2AuthorizationRequestBasedOnCookieRepository authorizationRequestRepository;
+
+    @Override
+    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+        String targetUrl = determineTargetUrl(request, response, authentication);
+
+        if (response.isCommitted()) {
+            logger.debug("Response has already been committed. Unable to redirect to " + targetUrl);
+            return;
+        }
+
+        clearAuthenticationAttributes(request, response);
+        getRedirectStrategy().sendRedirect(request, response, targetUrl);
+    }
+
+    protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
+        Optional<String> redirectUri = CookieUtil.getCookie(request, OAuth2AuthorizationRequestBasedOnCookieRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
+                .map(Cookie::getValue);
+
+        if(redirectUri.isPresent() && !isAuthorizedRedirectUri(redirectUri.get())) {
+            throw new IllegalArgumentException("Sorry! We've got an Unauthorized Redirect URI and can't proceed with the authentication");
+        }
+
+        String targetUrl = redirectUri.orElse(getDefaultTargetUrl());
+
+        OAuth2AuthenticationToken authToken = (OAuth2AuthenticationToken) authentication;
+        ProviderType providerType = ProviderType.valueOf(authToken.getAuthorizedClientRegistrationId().toUpperCase());
+
+        OidcUser user = ((OidcUser) authentication.getPrincipal());
+        OAuth2UserInfo userInfo = OAuth2UserInfoFactory.getOAuth2UserInfo(providerType, user.getAttributes());
+        Collection<? extends GrantedAuthority> authorities = ((OidcUser) authentication.getPrincipal()).getAuthorities();
+
+        RoleType roleType = hasAuthority(authorities, RoleType.ADMIN.getCode()) ? RoleType.ADMIN : RoleType.USER;
+
+        Date now = new Date();
+        AuthToken accessToken = tokenProvider.createAuthToken(
+                userInfo.getId(),
+                roleType.getCode(),
+                new Date(now.getTime() + appProperties.getAuth().getTokenExpiry())
+        );
+
+        // refresh 토큰 설정
+        long refreshTokenExpiry = appProperties.getAuth().getRefreshTokenExpiry();
+
+        AuthToken refreshToken = tokenProvider.createAuthToken(
+                appProperties.getAuth().getTokenSecret(),
+                new Date(now.getTime() + refreshTokenExpiry)
+        );
+
+        // DB 저장
+        UserRefreshToken userRefreshToken = userRefreshTokenRepository.findByUserId(userInfo.getId());
+        if (userRefreshToken != null) {
+            userRefreshToken.setRefreshToken(refreshToken.getToken());
+        } else {
+            userRefreshToken = new UserRefreshToken(userInfo.getId(), refreshToken.getToken());
+            userRefreshTokenRepository.saveAndFlush(userRefreshToken);
+        }
+
+        int cookieMaxAge = (int) refreshTokenExpiry / 60;
+
+        CookieUtil.deleteCookie(request, response, OAuth2AuthorizationRequestBasedOnCookieRepository.REFRESH_TOKEN);
+        CookieUtil.addCookie(response, OAuth2AuthorizationRequestBasedOnCookieRepository.REFRESH_TOKEN, refreshToken.getToken(), cookieMaxAge);
+
+        return UriComponentsBuilder.fromUriString(targetUrl)
+                .queryParam("token", accessToken.getToken())
+                .build().toUriString();
+    }
+
+    protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {
+        super.clearAuthenticationAttributes(request);
+        authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+    }
+
+    private boolean hasAuthority(Collection<? extends GrantedAuthority> authorities, String authority) {
+        if (authorities == null) {
+            return false;
+        }
+
+        for (GrantedAuthority grantedAuthority : authorities) {
+            if (authority.equals(grantedAuthority.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isAuthorizedRedirectUri(String uri) {
+        URI clientRedirectUri = URI.create(uri);
+
+        return appProperties.getOauth2().getAuthorizedRedirectUris()
+                .stream()
+                .anyMatch(authorizedRedirectUri -> {
+                    // Only validate host and port. Let the clients use different paths if they want to
+                    URI authorizedURI = URI.create(authorizedRedirectUri);
+                    if(authorizedURI.getHost().equalsIgnoreCase(clientRedirectUri.getHost())
+                            && authorizedURI.getPort() == clientRedirectUri.getPort()) {
+                        return true;
+                    }
+                    return false;
+                });
+    }
+}
+```
+
+**TokenAccessDeniedHandler(token에 대한 접근 거부시)**
+```
+@Component
+@RequiredArgsConstructor
+public class TokenAccessDeniedHandler implements AccessDeniedHandler {
+
+    private final HandlerExceptionResolver handlerExceptionResolver;
+
+    @Override
+    public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException {
+        //response.sendError(HttpServletResponse.SC_FORBIDDEN, accessDeniedException.getMessage());
+        handlerExceptionResolver.resolveException(request, response, null, accessDeniedException);
+    }
+}
+```
+
+**OAuth2UserInfoFactory(페이스북, 구글, 카카오, 네이버 class가 따로 분류되어 있으므로 case로 분류해 해당 class로 넘겨줌)**
+```
+public class OAuth2UserInfoFactory {
+    public static OAuth2UserInfo getOAuth2UserInfo(ProviderType providerType, Map<String, Object> attributes) {
+        switch (providerType) {
+            case GOOGLE: return new GoogleOAuth2UserInfo(attributes);
+            case FACEBOOK: return new FacebookOAuth2UserInfo(attributes);
+            case NAVER: return new NaverOAuth2UserInfo(attributes);
+            case KAKAO: return new KakaoOAuth2UserInfo(attributes);
+            default: throw new IllegalArgumentException("Invalid Provider Type.");
+        }
+    }
+}
+```
+
+**OAuth2UserInfoFactory(OAuth로그인시 필요한 데이터 정보)**
+
+```
+public abstract class OAuth2UserInfo {
+    protected Map<String, Object> attributes;
+
+    public OAuth2UserInfo(Map<String, Object> attributes) {
+        this.attributes = attributes;
+    }
+
+    public Map<String, Object> getAttributes() {
+        return attributes;
+    }
+
+    public abstract String getId();
+
+    public abstract String getName();
+
+    public abstract String getEmail();
+
+    public abstract String getImageUrl();
+}
+```
+
+**GoogleOAuth2UserInfo**
+```
+public class GoogleOAuth2UserInfo extends OAuth2UserInfo {
+
+    public GoogleOAuth2UserInfo(Map<String, Object> attributes) {
+        super(attributes);
+    }
+
+    @Override
+    public String getId() {
+        return (String) attributes.get("sub");
+    }
+
+    @Override
+    public String getName() {
+        return (String) attributes.get("name");
+    }
+
+    @Override
+    public String getEmail() {
+        return (String) attributes.get("email");
+    }
+
+    @Override
+    public String getImageUrl() {
+        return (String) attributes.get("picture");
+    }
+}
+```
+
+**FacebookOAuth2UserInfo**
+```
+public class FacebookOAuth2UserInfo extends OAuth2UserInfo {
+    public FacebookOAuth2UserInfo(Map<String, Object> attributes) {
+        super(attributes);
+    }
+
+    @Override
+    public String getId() {
+        return (String) attributes.get("id");
+    }
+
+    @Override
+    public String getName() {
+        return (String) attributes.get("name");
+    }
+
+    @Override
+    public String getEmail() {
+        return (String) attributes.get("email");
+    }
+
+    @Override
+    public String getImageUrl() {
+        return (String) attributes.get("imageUrl");
+    }
+
+    /*
+    @Override
+    public String getImageUrl() {
+        if(attributes.containsKey("picture")) {
+            Map<String, Object> pictureObj = (Map<String, Object>) attributes.get("picture");
+            if(pictureObj.containsKey("data")) {
+                Map<String, Object>  dataObj = (Map<String, Object>) pictureObj.get("data");
+                if(dataObj.containsKey("url")) {
+                    return (String) dataObj.get("url");
+                }
+            }
+        }
+        return null;
+    }
+    */
+}
+```
+**KakaoOAuth2UserInfo**
+```
+public class KakaoOAuth2UserInfo extends OAuth2UserInfo {
+
+    public KakaoOAuth2UserInfo(Map<String, Object> attributes) {
+        super(attributes);
+    }
+
+    @Override
+    public String getId() {
+        return attributes.get("id").toString();
+    }
+
+    @Override
+    public String getName() {
+        Map<String, Object> properties = (Map<String, Object>) attributes.get("properties");
+
+        if (properties == null) {
+            return null;
+        }
+
+        return (String) properties.get("profile_nickname");
+    }
+
+    @Override
+    public String getEmail() {
+        return (String) attributes.get("account_email");
+    }
+
+    @Override
+    public String getImageUrl() {
+        Map<String, Object> properties = (Map<String, Object>) attributes.get("properties");
+
+        if (properties == null) {
+            return null;
+        }
+
+        return (String) properties.get("profile_image");
+    }
+}
+```
+**NaverOAuth2UserInfo**
+```
+public class NaverOAuth2UserInfo extends OAuth2UserInfo {
+
+    public NaverOAuth2UserInfo(Map<String, Object> attributes) {
+        super(attributes);
+    }
+
+    @Override
+    public String getId() {
+        Map<String, Object> response = (Map<String, Object>) attributes.get("response");
+
+        if (response == null) {
+            return null;
+        }
+
+        return (String) response.get("id");
+    }
+
+    @Override
+    public String getName() {
+        Map<String, Object> response = (Map<String, Object>) attributes.get("response");
+
+        if (response == null) {
+            return null;
+        }
+
+        return (String) response.get("name");
+    }
+
+    @Override
+    public String getEmail() {
+        Map<String, Object> response = (Map<String, Object>) attributes.get("response");
+
+        if (response == null) {
+            return null;
+        }
+
+        return (String) response.get("email");
+    }
+
+    @Override
+    public String getImageUrl() {
+        Map<String, Object> response = (Map<String, Object>) attributes.get("response");
+
+        if (response == null) {
+            return null;
+        }
+
+        return (String) response.get("profile_image");
+    }
+}
+```
+
+**OAuth2AuthorizationRequestBasedOnCookieRepository(Cookie설정, add, delete, get)**
+```
+public class OAuth2AuthorizationRequestBasedOnCookieRepository implements AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
+
+    public final static String OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME = "oauth2_auth_request";
+    public final static String REDIRECT_URI_PARAM_COOKIE_NAME = "redirect_uri";
+    public final static String REFRESH_TOKEN = "refresh_token";
+    private final static int cookieExpireSeconds = 180;
+
+    @Override
+    public OAuth2AuthorizationRequest loadAuthorizationRequest(HttpServletRequest request) {
+        return CookieUtil.getCookie(request, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME)
+                .map(cookie -> CookieUtil.deserialize(cookie, OAuth2AuthorizationRequest.class))
+                .orElse(null);
+    }
+
+    @Override
+    public void saveAuthorizationRequest(OAuth2AuthorizationRequest authorizationRequest, HttpServletRequest request, HttpServletResponse response) {
+        if (authorizationRequest == null) {
+            CookieUtil.deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME);
+            CookieUtil.deleteCookie(request, response, REDIRECT_URI_PARAM_COOKIE_NAME);
+            CookieUtil.deleteCookie(request, response, REFRESH_TOKEN);
+            return;
+        }
+
+        CookieUtil.addCookie(response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME, CookieUtil.serialize(authorizationRequest), cookieExpireSeconds);
+        String redirectUriAfterLogin = request.getParameter(REDIRECT_URI_PARAM_COOKIE_NAME);
+        if (StringUtils.isNotBlank(redirectUriAfterLogin)) {
+            CookieUtil.addCookie(response, REDIRECT_URI_PARAM_COOKIE_NAME, redirectUriAfterLogin, cookieExpireSeconds);
+        }
+    }
+
+    @Override
+    public OAuth2AuthorizationRequest removeAuthorizationRequest(HttpServletRequest request) {
+        return this.loadAuthorizationRequest(request);
+    }
+
+    @Override
+    public OAuth2AuthorizationRequest removeAuthorizationRequest(HttpServletRequest request, HttpServletResponse response) {
+        return this.loadAuthorizationRequest(request);
+    }
+
+    public void removeAuthorizationRequestCookies(HttpServletRequest request, HttpServletResponse response) {
+        CookieUtil.deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME);
+        CookieUtil.deleteCookie(request, response, REDIRECT_URI_PARAM_COOKIE_NAME);
+        CookieUtil.deleteCookie(request, response, REFRESH_TOKEN);
+    }
+}
+```
+
+**CustomOAuth2UserService(User 정보 CRUD)**
+```
+@Service
+@RequiredArgsConstructor
+public class CustomOAuth2UserService extends DefaultOAuth2UserService {
+
+    private final UserRepository userRepository;
+
+    @Override
+    public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
+        OAuth2User user = super.loadUser(userRequest);
+
+        try {
+            return this.process(userRequest, user);
+        } catch (AuthenticationException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new InternalAuthenticationServiceException(ex.getMessage(), ex.getCause());
+        }
+    }
+
+    private OAuth2User process(OAuth2UserRequest userRequest, OAuth2User user) {
+        ProviderType providerType = ProviderType.valueOf(userRequest.getClientRegistration().getRegistrationId().toUpperCase());
+
+        OAuth2UserInfo userInfo = OAuth2UserInfoFactory.getOAuth2UserInfo(providerType, user.getAttributes());
+        User savedUser = userRepository.findByUserId(userInfo.getId());
+
+        if (savedUser != null) {
+            if (providerType != savedUser.getProviderType()) {
+                throw new OAuthProviderMissMatchException(
+                        "Looks like you're signed up with " + providerType +
+                        " account. Please use your " + savedUser.getProviderType() + " account to login."
+                );
+            }
+            updateUser(savedUser, userInfo);
+        } else {
+            savedUser = createUser(userInfo, providerType);
+        }
+
+        return UserPrincipal.create(savedUser, user.getAttributes());
+    }
+
+    private User createUser(OAuth2UserInfo userInfo, ProviderType providerType) {
+        LocalDateTime now = LocalDateTime.now();
+        User user = new User(
+                userInfo.getId(),
+                userInfo.getName(),
+                userInfo.getEmail(),
+                "Y",
+                userInfo.getImageUrl(),
+                providerType,
+                RoleType.USER,
+                now,
+                now
+        );
+
+        return userRepository.saveAndFlush(user);
+    }
+
+    private User updateUser(User user, OAuth2UserInfo userInfo) {
+        if (userInfo.getName() != null && !user.getUsername().equals(userInfo.getName())) {
+            user.setUsername(userInfo.getName());
+        }
+
+        if (userInfo.getImageUrl() != null && !user.getProfileImageUrl().equals(userInfo.getImageUrl())) {
+            user.setProfileImageUrl(userInfo.getImageUrl());
+        }
+
+        return user;
+    }
+}
+```
+**CustomUserDetailsService(회원가입시 user정보가 db에 존재하는지 확인, 없다면 create)**
+```
+@Service
+@RequiredArgsConstructor
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByUserId(username);
+        if (user == null) {
+            throw new UsernameNotFoundException("Can not find username.");
+        }
+        return UserPrincipal.create(user);
+    }
+}
+```
+**AuthToken(권한코드jwt)**
+```
+@Slf4j
+@RequiredArgsConstructor
+public class AuthToken {
+
+    @Getter
+    private final String token;
+    private final Key key;
+
+    private static final String AUTHORITIES_KEY = "role";
+
+    AuthToken(String id, Date expiry, Key key) {
+        this.key = key;
+        this.token = createAuthToken(id, expiry);
+    }
+
+    AuthToken(String id, String role, Date expiry, Key key) {
+        this.key = key;
+        this.token = createAuthToken(id, role, expiry);
+    }
+
+    private String createAuthToken(String id, Date expiry) {
+        return Jwts.builder()
+                .setSubject(id)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .setExpiration(expiry)
+                .compact();
+    }
+
+    private String createAuthToken(String id, String role, Date expiry) {
+        return Jwts.builder()
+                .setSubject(id)
+                .claim(AUTHORITIES_KEY, role)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .setExpiration(expiry)
+                .compact();
+    }
+
+    public boolean validate() {
+        return this.getTokenClaims() != null;
+    }
+
+    public Claims getTokenClaims() {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (SecurityException e) {
+            log.info("Invalid JWT signature.");
+        } catch (MalformedJwtException e) {
+            log.info("Invalid JWT token.");
+        } catch (ExpiredJwtException e) {
+            log.info("Expired JWT token.");
+        } catch (UnsupportedJwtException e) {
+            log.info("Unsupported JWT token.");
+        } catch (IllegalArgumentException e) {
+            log.info("JWT token compact of handler are invalid.");
+        }
+        return null;
+    }
+
+    public Claims getExpiredTokenClaims() {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            log.info("Expired JWT token.");
+            return e.getClaims();
+        }
+        return null;
+    }
+}
+```
+**AuthTokenProvider(권한코드jwt 설정)**
+```
+@Slf4j
+public class AuthTokenProvider {
+
+    private final Key key;
+    private static final String AUTHORITIES_KEY = "role";
+
+    public AuthTokenProvider(String secret) {
+        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+    }
+
+    public AuthToken createAuthToken(String id, Date expiry) {
+        return new AuthToken(id, expiry, key);
+    }
+
+    public AuthToken createAuthToken(String id, String role, Date expiry) {
+        return new AuthToken(id, role, expiry, key);
+    }
+
+    public AuthToken convertAuthToken(String token) {
+        return new AuthToken(token, key);
+    }
+
+    public Authentication getAuthentication(AuthToken authToken) {
+
+        if(authToken.validate()) {
+
+            Claims claims = authToken.getTokenClaims();
+            Collection<? extends GrantedAuthority> authorities =
+                    Arrays.stream(new String[]{claims.get(AUTHORITIES_KEY).toString()})
+                            .map(SimpleGrantedAuthority::new)
+                            .collect(Collectors.toList());
+
+            log.debug("claims subject := [{}]", claims.getSubject());
+            User principal = new User(claims.getSubject(), "", authorities);
+
+            return new UsernamePasswordAuthenticationToken(principal, authToken, authorities);
+        } else {
+            throw new TokenValidFailedException();
+        }
+    }
+
+}
+```
+**CookieUtil(쿠키 설정)**
+```
+public class CookieUtil {
+
+    public static Optional<Cookie> getCookie(HttpServletRequest request, String name) {
+        Cookie[] cookies = request.getCookies();
+
+        if (cookies != null && cookies.length > 0) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName())) {
+                    return Optional.of(cookie);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public static void addCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        cookie.setMaxAge(maxAge);
+
+        response.addCookie(cookie);
+    }
+
+    public static void deleteCookie(HttpServletRequest request, HttpServletResponse response, String name) {
+        Cookie[] cookies = request.getCookies();
+
+        if (cookies != null && cookies.length > 0) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName())) {
+                    cookie.setValue("");
+                    cookie.setPath("/");
+                    cookie.setMaxAge(0);
+                    response.addCookie(cookie);
+                }
+            }
+        }
+    }
+
+    public static String serialize(Object obj) {
+        return Base64.getUrlEncoder()
+                .encodeToString(SerializationUtils.serialize(obj));
+    }
+
+    public static <T> T deserialize(Cookie cookie, Class<T> cls) {
+        return cls.cast(
+                SerializationUtils.deserialize(
+                        Base64.getUrlDecoder().decode(cookie.getValue())
+                )
+        );
+    }
+
+}
+```
+**HeaderUtil(Header data설정)**
+```
+public class HeaderUtil {
+
+    private final static String HEADER_AUTHORIZATION = "Authorization";
+    private final static String TOKEN_PREFIX = "Bearer ";
+
+    public static String getAccessToken(HttpServletRequest request) {
+        String headerValue = request.getHeader(HEADER_AUTHORIZATION);
+
+        if (headerValue == null) {
+            return null;
+        }
+
+        if (headerValue.startsWith(TOKEN_PREFIX)) {
+            return headerValue.substring(TOKEN_PREFIX.length());
+        }
+
+        return null;
     }
 }
 ```
