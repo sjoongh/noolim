@@ -5,9 +5,9 @@ spring서버는 OAuth2로그인과 JWT토큰을 관리하고 있으며 node.js�
 **프로젝트의 결과물 사이트는 다음과 같다.**
 **http://www.noolim.kro.kr/**
 
-- 백엔드 : Nodejs(https://github.com/sjoongh/noolim/tree/node)  
+- Nodejs(https://github.com/sjoongh/noolim/tree/node)  
 - Spring Boot(https://github.com/sjoongh/noolim/tree/spring)
-- 프론트 : Vue.js
+- Vue.js
 
 ##
 
