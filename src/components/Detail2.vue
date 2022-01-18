@@ -335,7 +335,6 @@ export default {
             );
           }
         } else {
-          // TODO: 되돌리기, 전체 렌더링 안됨
           this.hashsdata2 = [];
           for (let i = 0; i < 25; i++) {
             if (this.hashs[i].clicked == true) {
