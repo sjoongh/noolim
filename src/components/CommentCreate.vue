@@ -53,16 +53,6 @@ export default {
       this.subCommentToggle();
       this.context = "";
     }
-
-    // async createSubComment() {
-    //   await addSubComment({
-    //    user_no:1,
-    //    comment_no:this.commentNo,
-    //    context:this.context});
-    //   this.reloadSubComments();
-    //   this.subCommentToggle();
-    //   this.context = "";
-    // },
   }
 };
 </script>
