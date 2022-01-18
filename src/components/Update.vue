@@ -14,14 +14,6 @@
             readonly
           />
         </div>
-        <!-- <div>
-        <label class="label" for="idname">아이디</label>
-        <input type="text" class="lock" name="idname" id="idname" required="" v-model="idname" readonly>
-      </div> -->
-        <!-- <div>
-        <label class="label" for="password">비밀번호</label>
-        <input type="password" name="password" id="password" required="" v-model="password">
-      </div> -->
         <div>
           <label class="label" for="regdate">가입일</label>
           <input
@@ -48,51 +40,8 @@
             <p v-show="!email.valid">이메일 형식으로 기입해주세요!</p>
           </div>
           <div></div>
-
-          <!-- <h4>선택사항</h4>
-        <p class="select">
-          <select class="budget" v-model="selection.member">
-						<option value="0">1층</option>
-						<option value="1">2층</option>
-            <option value="3">3층</option>
-            <option value="4">4층</option>
-					</select>
-        </p> -->
         </div>
-
-        <!-- <div>
-        <h4>선택사항</h4>
-        <ul class="vue-form-list">
-          <li>
-            <input type="radio" name="radio-1" id="radio-1" value="angular" 
-                   v-model="selection.framework">
-            <label for="radio-1">짜장면</label>
-          </li>
-          <li>
-            <input type="radio" name="radio-2" id="radio-2" value="react" 
-                   v-model="selection.framework">
-            <label for="radio-2">짬뽕</label>
-          </li>
-          <li>
-            <input type="radio" name="radio-3" id="radio-3" value="vue" 
-                   v-model="selection.framework">
-            <label for="radio-3">탕수육</label>
-          </li>
-        </ul>
-      </div> -->
-
-        <!-- <div>
-        <h4>Features</h4>
-      </div>
-      <div>
-        <label class="label" for="textarea">Message with Counter</label>
-        <textarea class="message" name="textarea" id="textarea" required="" 
-                  v-model="message.text" 
-                  :maxlength="message.maxlength"></textarea>
-        <span class="counter">{{ message.text.length }} / {{ message.maxlength }}</span>
-      </div> -->
         <div>
-          <!-- <input type="submit" value="회원탈퇴"> -->
           <button class="drop" @click="goDrop">회원탈퇴</button>
         </div>
       </fieldset>
@@ -115,16 +64,6 @@ export default {
         value: this.$store.state.account.user.email,
         valid: true
       }
-      //   selection: {
-      //     member: "0",
-      //     framework: "vue",
-      //     features: []
-      //   },
-      //   message: {
-      //     text: `내용을 입력하세요`,
-      //     maxlength: 255
-      //   },
-      //   submitted: false
     };
   },
   methods: {
