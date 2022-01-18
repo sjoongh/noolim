@@ -635,7 +635,7 @@ export default {
 
 ### req-wrapper.js
 - 요청 관련 설정
-- TODO-LIST : 추후에 설명 추가하기
+- spring boot서버로부터 유저정보 가져오고, 보내고, 수정, 삭제에 
 
 ```
 import axios from "axios";
@@ -707,7 +707,7 @@ export default {
 ```
 
 ### res-handler.js
-- 서버로부터 응답 성공 유무 확인과 res.data.body로 데이터 받음
+- 서버로부터 요청에 대한 응답 성공 유무 확인과 res.data.body로 데이터 받음
 
 ```
 export default {
@@ -4230,7 +4230,6 @@ export default {
             );
           }
         } else {
-          // TODO: 되돌리기, 전체 렌더링 안됨
           this.hashsdata2 = [];
           for (let i = 0; i < 25; i++) {
             if (this.hashs[i].clicked == true) {
