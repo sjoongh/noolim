@@ -1,6 +1,6 @@
 <template>
   <div>
-    <!-- 수정누르면 템플릿 보였다 안보였다하게 -->
+    <!-- click시 템플릿 보였다 안보였다하게 -->
     <template v-if="disappear">
       <div class="comment-list-item">
         <div class="img"></div>
@@ -108,14 +108,7 @@ export default {
     CommentCreate
   },
 
-  // async created(){
-  //   const ret = await findSubComment({comment_no});
-  //   this.subCommentList = ret.data;
-  // },
   data() {
-    // name: data.User.filter(
-    //   item => item.user_no === this.commentObj.user_no
-    // )[0].name,
     return {
       name: this.$store.state.account.user.username,
       subCommentList: [],
