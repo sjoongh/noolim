@@ -26,37 +26,8 @@
             @click="dbId == storeId ? deleteCoData() : notCorrectMsg()"
             >삭제</b-button
           >
-          <!-- <b-button variant="info" @click="subCommentToggle">대댓글 달기</b-button> -->
         </div>
       </div>
-
-      <!-- 대댓글 기능 안넣을거 같아서 주석처리 -->
-      <!-- <template v-if="subCommentCreateToggle">
-      <CommentCreate
-        :isSubComment="true"
-        :commentNo="commentObj.comment_no"
-        :reloadSubComments="reloadSubComments"
-        :subCommentToggle="subCommentToggle"
-      />
-    </template> -->
-
-      <!-- <template v-if="subCommentList.length > 0">
-      <div
-        class="comment-list-item-subcomment-list"
-        :key="item.subcomment_no"
-        v-for="item in subCommentList"
-      >
-        <div class="comment-list-item-name">
-          <div>{{item.user_name}}</div>
-          <div>{{item.regdate}}</div>
-        </div>
-        <div class="comment-list-item-context">{{item.context}}</div>
-        <div class="comment-list-item-button">
-          <b-button variant="info">수정</b-button>
-          <b-button variant="info"  @click="deleteScData">삭제</b-button>
-        </div>
-      </div>
-    </template> -->
     </template>
 
     <template v-if="!disappear">
@@ -108,10 +79,6 @@ export default {
     LocationCommentCreate
   },
 
-  // async created(){
-  //   const ret = await findSubComment({comment_no});
-  //   this.subCommentList = ret.data;
-  // },
   data() {
     return {
       // name: data.User.filter(
@@ -131,13 +98,6 @@ export default {
     notCorrectMsg() {
       alert("권한이 존재하지 않습니다.");
     },
-    // subCommentToggle() {
-    //   this.subCommentCreateToggle = !this.subCommentCreateToggle;
-    // },
-    // async reloadSubComments() {
-    //   const ret = await findSubComment({comment_no: this.commentObj.comment_no});
-    //   this.subCommentList = ret.data;
-    // },
     async deleteCoData() {
       alert("댓글을 삭제합니다");
       await deleteLocationComment({ comment_no: this.commentObj.comment_no });
@@ -158,12 +118,6 @@ export default {
     cancleModify() {
       this.$router.go(this.$router.currentRoute);
     }
-    //   async deleteScData(){
-    //   await deleteSubComment({subcomment_no: this.subcomment_no})
-    //   this.$router.push({
-    //     path: `/board/free`
-    //   })
-    // }
   }
 };
 </script>
