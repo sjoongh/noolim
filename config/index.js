@@ -14,65 +14,43 @@ module.exports = {
 
     // Various Dev Server settings
     host: 'ec2-3-34-126-3.ap-northeast-2.compute.amazonaws.com', // can be overwritten by process.env.HOST
-    port: 8082, // can be overwritten by process.env.PORT, if port is in use, a free one will be determined
+    port: 8082, 
     autoOpenBrowser: false,
     errorOverlay: true,
     notifyOnErrors: true,
-    poll: false, // https://webpack.js.org/configuration/dev-server/#devserver-watchoptions-
+    poll: false, 
 
-    // Use Eslint Loader?
-    // If true, your code will be linted during bundling and
-    // linting errors and warnings will be shown in the console.
+    // 빌드시 eslint 사용
     useEslint: true,
-    // If true, eslint errors and warnings will also be shown in the error overlay
-    // in the browser.
+    // eslint에러를 브라우저에서 확인할 것인지 여부
     showEslintErrorsInOverlay: false,
-
-    /**
-     * Source Maps
-     */
 
     // https://webpack.js.org/configuration/devtool/#development
     devtool: 'cheap-module-eval-source-map',
 
-    // If you have problems debugging vue-files in devtools,
-    // set this to false - it *may* help
-    // https://vue-loader.vuejs.org/en/options.html#cachebusting
+    // 디버깅시 문제가 발생하면 vue-files안의 devtools에서 감지
     cacheBusting: true,
 
     cssSourceMap: true
   },
 
   build: {
-    // Template for index.html
+    // Template index.html
     index: path.resolve(__dirname, '../dist/index.html'),
-    // index: path.resolve(__dirname, '../../board-node/public/index.html'),
 
     // Paths
     assetsRoot: path.resolve(__dirname, '../dist'),
-    // assetsRoot: path.resolve(__dirname, '../../board-node/public'),
     assetsSubDirectory: 'static',
     assetsPublicPath: '/',
 
-    /**
-     * Source Maps
-     */
 
     productionSourceMap: true,
-    // https://webpack.js.org/configuration/devtool/#production
     devtool: '#source-map',
 
-    // Gzip off by default as many popular static hosts such as
-    // Surge or Netlify already gzip all static assets for you.
-    // Before setting to `true`, make sure to:
-    // npm install --save-dev compression-webpack-plugin
     productionGzip: false,
     productionGzipExtensions: ['js', 'css'],
 
-    // Run the build command with an extra argument to
-    // View the bundle analyzer report after build finishes:
-    // `npm run build --report`
-    // Set to `true` or `false` to always turn it on or off
+    // npm build시 관련 report생성
     bundleAnalyzerReport: process.env.npm_config_report
   }
 }
