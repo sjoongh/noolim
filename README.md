@@ -1,5 +1,12 @@
 # Noolim Project
 
+**팀 인원 : 총 3명**<br />
+**팀장 : sjoongh | 역할 : 프론트(vue), 백엔드(spring, node.js)**
+**팀원 : kangchan | 역할 : 프론트(vue), 백엔드(node.js)**<br />
+**팀원 : kimnarae | 역할 : 프론트(vue)**<br />
+
+**DB : MySQL**
+
 **MSA 기반으로 node.js와 spring서버 두 서버로 AWS를 활용한 서버 배포까지 구현하였다.
 spring서버는 OAuth2로그인과 JWT토큰을 관리하고 있으며 node.js서버는 로그인 기능을 제외한 나머지 모든 데이터를 관리하도록 설계하였다.**
 **프로젝트의 결과물 사이트는 다음과 같다.**
