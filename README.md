@@ -7,9 +7,9 @@
 
 ### DataBase : MySQL
 
-**MSA 기반으로 node.js와 spring서버 두 서버로 AWS를 활용한 서버 배포까지 구현하였다.
-spring서버는 OAuth2로그인과 JWT토큰을 관리하고 있으며 node.js서버는 로그인 기능을 제외한 나머지 모든 데이터를 관리하도록 설계하였다.**
-**프로젝트의 결과물 사이트는 다음과 같다.**
+**MSA 기반으로 node.js와 spring서버 두 서버로 AWS를 활용한 서버 배포까지 구현하였습니다.
+spring서버는 OAuth2로그인과 JWT토큰을 관리하고 있으며 node.js서버는 로그인 기능을 제외한 나머지 모든 데이터를 관리하도록 설계했습니다.**
+**프로젝트의 결과물 사이트는 다음과 같습니다.**
 **http://www.noolim.kro.kr/**
 
 - Nodejs(https://github.com/sjoongh/noolim/tree/node)  
