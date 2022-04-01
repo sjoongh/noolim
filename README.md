@@ -1,7 +1,7 @@
 # Noolim Project
 
 **팀 인원 : 총 3명**<br /><br />
-**팀장 : sjoongh --> 역할 : 프론트(vue), 백엔드(spring, node.js)**<br />
+**팀장 : sjoongh --> 역할 : 프론트(vue), 백엔드(spring Boot, node.js)**<br />
 **팀원 : kangchan --> 역할 : 프론트(vue), 백엔드(node.js)**<br />
 **팀원 : kimnarae --> 역할 : 프론트(vue)**<br />
 
