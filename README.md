@@ -216,11 +216,10 @@ spring.datasource.driver-class-name=org.mariadb.jdbc.Driver # RDS는 Maria DB로
 1. lombok
 2. springboot web, springboot security
 3. data jpa
-4. h2database
-5. oauth2-client
-6. mariadb
-7. jdbc
-8. jjwt(3가지)
+4. oauth2-client
+5. mariadb
+6. jdbc
+7. jjwt(3가지)
 
 ------------------------------------------------------------------------------------------------
 ## 3. 코드 구현
